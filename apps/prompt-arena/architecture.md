@@ -89,3 +89,33 @@ flowchart TD
   API -. future .-> PG[(PostgreSQL)]
   API -. future .-> VAULT[Secret manager]
 ~~~
+
+
+## Live AI optimization pipeline (implemented on feature branch)
+The additional `lib/prompt-arena-pipeline.mjs` module adds explicit function boundaries:
+1. `generateCandidates` requests a fixed number of structurally distinct prompts.
+2. `executeCandidate` runs each prompt with the same task, execution provider/model, temperature and output-token limit.
+3. `judgeCandidates` randomizes candidate order, hides prompt text/strategy from the judge, and requests dimension-level scores with a reference answer when available.
+4. `scoreJudgment` applies rubric weights and normalizes the result to 0–100.
+5. `rankTrials` ranks successful outputs and preserves per-dimension evidence.
+
+The new `/arena` UI is served by the existing Node server. `POST /api/arena/run` saves completed experiments through the existing local JSON store. `GET /api/benchmark/100` exposes the versioned dataset.
+
+### Rubric v1
+- Correctness: 35%
+- Relevance: 20%
+- Completeness: 20%
+- Clarity: 10%
+- Constraint adherence: 15%
+
+Dimension scores are 1–5. Weighted score = 20 × sum(weight × dimension score). This is an LLM-judge estimate. It is not interchangeable with exact-match, executable or human evaluation. Generator, executor and judge model IDs are recorded in the run configuration. Use an independently selected judge model for reduced evaluator correlation.
+
+### Benchmark v1
+The 100-case JSONL suite has ten balanced categories: structured extraction, format transformation, arithmetic, logic/reasoning, summarization, classification, instruction following, code/debugging, general knowledge and planning/decision. Each case includes a reference answer and evaluation note. The benchmark runner compares a fixed baseline prompt against generated candidates and saves per-case scores and aggregate deltas. Start with a 5-case smoke run; run all 100 only after checking model availability and spend limits.
+
+### Known limitations
+- The local JSON store remains the persistence backend; PostgreSQL is not wired in.
+- LLM-judge scores can be biased and require calibration against blinded human labels.
+- A single benchmark pass is not statistical evidence. Repeat runs and preserve a held-out set.
+- The benchmark is an initial development suite, not an independently validated public benchmark.
+- Live provider execution requires configured credentials; repository changes do not imply that live model calls have been run.
