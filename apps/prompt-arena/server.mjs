@@ -34,7 +34,7 @@ function limited(req) {
 async function mapLimit(items, limit, fn) {
   const results = new Array(items.length); let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) { const i = cursor++; try { results[i] = await fn(items[i], i); } catch (e) { results[i] = { ...items[i], status: "failed", error: String(e.message || e).slice(0, 500) }; } }
+    while (cursor < items.length) { const i = cursor++; try { results[i] = await fn(items[i], i); } catch (e) { const item = items[i]; results[i] = { provider: item.provider, model: item.model, variant_name: item.variant_name, variant_index: item.variant_index, repetition: item.repetition, status: "failed", error: String(e.message || e).slice(0, 500) }; } }
   }));
   return results;
 }
