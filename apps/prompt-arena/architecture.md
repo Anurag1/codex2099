@@ -35,3 +35,21 @@ Repeated stochastic trials should report sample count, mean, standard deviation 
 
 ## Security / operations
 Store only secret references in database; never expose API keys to browser code. Redact authorization headers and sensitive prompt content in logs. Apply auth/workspace isolation, rate limits, concurrency caps, provider timeouts, retries and per-run spend ceilings. Warn against submitting secrets or sensitive personal data.
+
+
+## Implemented live-provider MVP
+The current code implements a Node.js 20+ HTTP server with no runtime dependencies:
+- `lib/providers.mjs`: OpenAI Chat Completions, Anthropic Messages and Gemini generateContent adapters.
+- `server.mjs`: health endpoint, comparison endpoint, request validation, per-IP in-memory rate limiting, bounded concurrency and provider timeouts.
+- `lib/evaluation.mjs`: input validation, heuristic rubric proxies and deterministic ranking.
+- `tests/evaluation.test.mjs`: Node built-in test coverage.
+
+### Implemented API
+`GET /api/health` returns provider configured flags and default model names only.
+`POST /api/compare` accepts objective, shared input, 2–10 variants, 1–3 providers and 1–5 repetitions. It executes the full Cartesian product of providers × variants × repetitions. Each request receives the same input and generation settings. Successful outputs include latency, token usage if exposed by provider, score, score provenance and rationale. Failed outputs contain provider/model/variant identifiers and a bounded error string; prompt text and input are not echoed in failure payloads.
+
+### Evaluation caveat
+The shipped evaluator is a heuristic proxy, not an LLM judge. Reference-answer mode checks expected-term overlap only. It cannot reliably determine factuality, semantic equivalence, or nuanced instruction-following. A future LLM judge must be separately labelled, run against a versioned rubric, and calibrated against human-labelled examples. Token prices are not hard-coded; actual cost estimation requires a versioned provider pricing table.
+
+### Security boundary
+The server binds to loopback by default and should remain local until authentication and durable quotas are implemented. API keys are environment-only. The in-memory limiter is not distributed protection. Use a secret manager and an authenticated reverse proxy before any shared deployment.
