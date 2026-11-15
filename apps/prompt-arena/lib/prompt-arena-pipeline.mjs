@@ -45,7 +45,7 @@ function validateCandidateSet(value, expectedCount) {
     if (!prompt || prompt.length > 12000) throw new Error(`Candidate ${id} has invalid prompt text.`);
     if (id === "ORIGINAL_BASELINE") throw new Error("Candidate ID is reserved.");
     if (ids.has(id)) throw new Error("Prompt generator returned duplicate candidate IDs.");
-    const normalized = prompt.toLowerCase().replace(/\\s+/g, " ").trim();
+    const normalized = prompt.toLowerCase().replace(/\s+/g, " ").trim();
     if (normalizedPrompts.has(normalized)) throw new Error("Prompt generator returned duplicate prompt text.");
     ids.add(id);
     normalizedPrompts.add(normalized);
