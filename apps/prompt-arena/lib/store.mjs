@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = process.env.PROMPT_ARENA_DATA_DIR || path.join(root, "data");
+const dataDir = process.env.PROMPT_ARENA_DATA_DIR || path.join(root, "..", "data");
 const dataFile = path.join(dataDir, "experiments.json");
 let writeQueue = Promise.resolve();
 
