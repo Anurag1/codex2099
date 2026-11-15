@@ -30,3 +30,16 @@ test("ranking sorts highest score first", () => {
   const result = rankOutputs([{ score: 50, latency_ms: 10 }, { score: 90, latency_ms: 100 }]);
   assert.equal(result[0].score, 90);
 });
+
+import { aggregateResults } from "../lib/evaluation.mjs";
+test("aggregates repeated trials with mean and standard deviation", () => {
+  const grouped = aggregateResults([
+    { provider: "openai", model: "m", variant_index: 0, variant_name: "A", score: 80, latency_ms: 100 },
+    { provider: "openai", model: "m", variant_index: 0, variant_name: "A", score: 100, latency_ms: 200 }
+  ]);
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].sample_count, 2);
+  assert.equal(grouped[0].mean_score, 90);
+  assert.equal(grouped[0].score_stddev, 10);
+  assert.equal(grouped[0].mean_latency_ms, 150);
+});
