@@ -25,6 +25,9 @@ test("local experiment store saves, lists and retrieves a snapshot", async () =>
     assert.equal(listed.length, 1);
     assert.equal(listed[0].id, saved.id);
     assert.equal("results" in listed[0], false);
+    const updated = await store.updateExperimentWinner(saved.id, "openai|gpt-4o-mini|A");
+    assert.equal(updated.winner, "openai|gpt-4o-mini|A");
+    assert.equal((await store.getExperiment(saved.id)).winner, "openai|gpt-4o-mini|A");
   } finally {
     if (previous === undefined) delete process.env.PROMPT_ARENA_DATA_DIR;
     else process.env.PROMPT_ARENA_DATA_DIR = previous;
