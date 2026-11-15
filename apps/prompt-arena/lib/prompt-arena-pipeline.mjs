@@ -146,7 +146,7 @@ export async function runPromptArena({
   const started = Date.now();
   const generated = await generateCandidates({ task, count: candidateCount, provider, model });
   const candidates = baselinePrompt
-    ? [{ id: "BASELINE", name: "Original baseline", prompt: baselinePrompt }, ...generated]
+    ? [{ id: "ORIGINAL_BASELINE", name: "Original baseline", prompt: baselinePrompt }, ...generated]
     : generated;
   const settled = await mapLimit(candidates, Math.max(1, Math.min(8, Number(process.env.MAX_CONCURRENCY || 4))), candidate =>
     executeCandidate({ candidate, task, provider, model, temperature, maxTokens })
