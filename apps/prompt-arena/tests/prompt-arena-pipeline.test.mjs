@@ -75,6 +75,9 @@ test("runs generation, candidate execution, blind judging and selection end-to-e
     assert.equal(result.winner.score, 98);
     assert.equal(result.leaderboard[0].rank, 1);
     assert.equal(result.summary.score_provenance, "llm_judge_estimate");
+    assert.equal(result.summary.token_usage.input_tokens, 40);
+    assert.equal(result.summary.token_usage.output_tokens, 48);
+    assert.equal(result.summary.token_usage.total_tokens, 88);
   } finally {
     globalThis.fetch = old.fetch;
     if (old.key === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = old.key;
