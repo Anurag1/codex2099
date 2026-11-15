@@ -1,55 +1,68 @@
-# Prompt Arena Architecture
+# Prompt Arena — Product and System Architecture
 
-## Logical system
-Browser UI → Application API → experiment orchestration → ProviderAdapter → model provider. Evaluation is a separate service: heuristic evaluator, optional LLM judge, reference evaluator, and human preference capture. Persistence is PostgreSQL; secrets live in a server-side secret manager.
+## Product definition
+Prompt Arena is a controlled experimentation workspace for comparing prompt variants across language models. It answers: under the same task conditions, which prompt/model configuration performs better on a defined benchmark, and how consistent is that result? It is not a generic chat interface; the core object is a reproducible experiment.
+
+## Product modules
+1. Experiment Studio — objective, shared test input, prompt candidates, provider/model selection, generation parameters and repetition count.
+2. Execution Orchestrator — creates the prompt × model × test-case × repetition matrix, applies bounded concurrency and timeouts, and records partial failures.
+3. Provider Adapters — normalized request/response interfaces for OpenAI, Anthropic and Gemini. Credentials stay server-side.
+4. Evaluation Engine — separately versioned heuristic, reference-based, LLM-judge and human evaluators. The prototype implements transparent structural/term-overlap heuristics only.
+5. Results Arena — aggregate ranking, per-trial outputs, latency, token counts, variability and error inspection.
+6. Prompt Library — reusable prompt snippets stored in browser-local storage in this prototype.
+7. Run History — backend-persisted local experiment snapshots; PostgreSQL is the production persistence target.
+8. Decision Record — explicit human winner selection, separate from machine scores.
+9. Workspace & Governance — multi-user access, quotas, audit events and secret references are production design requirements, not yet implemented.
+
+## Logical architecture
+Browser SPA (HTML/CSS/JS) → Local HTTP API (Node.js 20+, built-in HTTP) → validation and rate limiting → experiment orchestrator (bounded worker pool) → provider adapters → OpenAI / Anthropic / Gemini APIs.
+Side paths: local JSON snapshot store (working prototype), PostgreSQL (target durable store), secret manager (target; prototype reads environment variables), evaluation engine (heuristic now; calibrated evaluators later).
 
 ## Controlled experiment invariant
-Each prompt candidate in a comparison must receive identical test input, model/provider configuration, system context, generation parameters, and evaluator rubric. Freeze a run manifest containing prompt version IDs, model/version, temperature, max tokens, seed where supported, input hash, rubric version and creation time.
+Every candidate in one comparison receives the same test case, selected model configuration, system context, generation parameters and evaluator version. Freeze a run manifest containing immutable prompt text/version and SHA-256, exact provider/model, test-case input hash, temperature, output-token limit, supported seed, evaluator/rubric version, repetition number and timestamps. Do not change input or generation settings between candidates and attribute the difference to prompt quality.
 
-## Run lifecycle
-1. Validate objective, prompt candidates, test cases, model configuration and cost ceiling.
-2. Freeze experiment manifest and immutable prompt versions.
-3. Create one output task per prompt × model × test case × repetition.
-4. Dispatch with bounded concurrency, timeout and bounded retry/backoff.
-5. Persist output, provider request ID, latency, token usage and cost when available.
-6. Evaluate separately and store evaluator type and score provenance.
-7. Rank with visible weighted rubric. Keep human preference separate.
-8. Explicitly choose winner; preserve its immutable version.
-9. Evolve by creating a child prompt variant; never overwrite a parent.
+## Execution lifecycle
+1. Validate objective, prompt candidates, test cases, providers, model IDs and resource limits.
+2. Freeze run manifest and create the trial matrix.
+3. Dispatch trials through a bounded worker pool.
+4. Enforce timeouts and provider-specific error handling.
+5. Store outputs, latency, request IDs and token usage when supplied.
+6. Evaluate independently from generation.
+7. Aggregate sample count, mean, standard deviation and latency by prompt/model/test case.
+8. Display failed trials and partial completion rather than silently dropping them.
+9. Let a human select a winner; preserve the selected version and rationale.
+10. Evolve by creating a child prompt version, never overwriting an earlier candidate.
 
-## Evaluation
-Default dimensions: task success 30%, correctness 30%, completeness 15%, instruction adherence 15%, clarity 10%. Scores should be normalized to 0–100; weighted score = sum(weight × normalized dimension score) / sum(weights). Human preference is reported independently, not silently merged into machine scores. Show evaluator type, rubric version, evidence/rationale and uncertainty.
+## Evaluation model
+Target rubric dimensions: task success 30%, correctness against reference 30%, completeness 15%, instruction adherence 15%, clarity 10%. The current prototype does not implement this full rubric. It implements a small structural heuristic and optional expected-term overlap proxy. Those scores can mislead and are visibly labelled as heuristics. A future LLM judge must use a versioned rubric, blinded candidate labels, pairwise calibration against human annotations, judge-consistency checks and a held-out validation set. Human preference remains a separate signal.
 
-Repeated stochastic trials should report sample count, mean, standard deviation and per-case breakdown. Never claim a statistical win based on a single sample.
+## Data model
+See schema.sql. Core entities: workspaces and members; experiments and immutable prompt variants; benchmark suites and test cases; provider connections (secret references only); experiment runs and individual trials; raw outputs and evaluations; human votes and audit events. The current prototype persists a bounded list of experiment snapshots to data/experiments.json. It does not yet use PostgreSQL, accounts, team workspaces, durable queues or a secret manager.
 
-## Suggested API
-- POST /api/experiments
-- GET /api/experiments/:id
-- POST /api/experiments/:id/variants
-- POST /api/experiments/:id/runs
-- GET /api/runs/:id
-- POST /api/outputs/:id/evaluations
-- POST /api/outputs/:id/votes
-- POST /api/experiments/:id/evolve
-- GET /api/experiments/:id/export?format=json|csv
+## Implemented API
+- GET /api/health — provider configured flags, default model names and storage mode; never returns secrets.
+- POST /api/compare — validates and executes a comparison; returns individual trials, aggregate ranking and summary.
+- GET /api/experiments — lists recent saved snapshots.
+- POST /api/experiments — persists a completed snapshot in local JSON storage.
+- GET /api/experiments/:id — returns one saved snapshot.
 
-## Security / operations
-Store only secret references in database; never expose API keys to browser code. Redact authorization headers and sensitive prompt content in logs. Apply auth/workspace isolation, rate limits, concurrency caps, provider timeouts, retries and per-run spend ceilings. Warn against submitting secrets or sensitive personal data.
+Target production API (not yet implemented): experiment CRUD; prompt variant versioning; asynchronous run creation/status/cancellation; output evaluation and human voting; prompt evolution; JSON/CSV export.
 
+## UI information architecture
+- Experiment Studio: experiment definition and prompt variants on the left; results, ranking and decision on the right.
+- Prompt Library: reusable snippets saved locally.
+- Run History: persisted experiments with detail replay.
+- Providers & Settings: connection health and setup guidance.
 
-## Implemented live-provider MVP
-The current code implements a Node.js 20+ HTTP server with no runtime dependencies:
-- `lib/providers.mjs`: OpenAI Chat Completions, Anthropic Messages and Gemini generateContent adapters.
-- `server.mjs`: health endpoint, comparison endpoint, request validation, per-IP in-memory rate limiting, bounded concurrency and provider timeouts.
-- `lib/evaluation.mjs`: input validation, heuristic rubric proxies and deterministic ranking.
-- `tests/evaluation.test.mjs`: Node built-in test coverage.
+Responsive layout collapses to one column on smaller screens. UI uses semantic controls, labels, loading/error states and explicit score provenance.
 
-### Implemented API
-`GET /api/health` returns provider configured flags and default model names only.
-`POST /api/compare` accepts objective, shared input, 2–10 variants, 1–3 providers and 1–5 repetitions. It executes the full Cartesian product of providers × variants × repetitions. Each request receives the same input and generation settings. Successful outputs include latency, token usage if exposed by provider, score, score provenance and rationale. Repeated trials are grouped by provider/model/variant and report mean score, score standard deviation, sample count and mean latency. Failed outputs contain provider/model/variant identifiers and a bounded error string; prompt text and input are not echoed in failure payloads.
+## Security and reliability
+Prototype boundary: server binds to 127.0.0.1 by default; API keys are environment-only; local JSON store is for one development instance; process-local rate limiter is not distributed protection; no authentication, workspace isolation, database encryption, job queue or public deployment hardening.
+Before public deployment: add authentication and authorization on every workspace resource; enable PostgreSQL row-level security and audit logging; use a managed secret vault and key rotation; deploy behind HTTPS and an authenticated reverse proxy; add durable queue workers, idempotency, retries and cancellation; add spend limits, quotas and concurrency controls; implement retention/deletion and sensitive-data redaction; add monitoring, tracing, alerting and backup/restore tests.
 
-### Evaluation caveat
-The shipped evaluator is a heuristic proxy, not an LLM judge. Reference-answer mode checks expected-term overlap only. It cannot reliably determine factuality, semantic equivalence, or nuanced instruction-following. A future LLM judge must be separately labelled, run against a versioned rubric, and calibrated against human-labelled examples. Token prices are not hard-coded; actual cost estimation requires a versioned provider pricing table.
-
-### Security boundary
-The server binds to loopback by default and should remain local until authentication and durable quotas are implemented. API keys are environment-only. The in-memory limiter is not distributed protection. Use a secret manager and an authenticated reverse proxy before any shared deployment.
+## Roadmap
+P0 — local MVP (implemented): responsive studio, three provider adapters, bounded live comparisons, heuristic scoring, JSON/CSV export, local prompt library and local run history.
+P1 — evaluation validity: labelled benchmark import, exact-match/structured validators, task-specific metrics, blinded pairwise human review and evaluator calibration.
+P2 — durable collaboration: PostgreSQL repository layer, authentication, workspace permissions, prompt versioning, audit log and background queue.
+P3 — decision-grade intelligence: calibrated LLM judge, bootstrap confidence intervals, paired statistical tests, cost estimation from versioned price tables and prompt mutation with regression gates.
+P4 — hosted product: managed deployment, quotas/billing, team sharing, privacy controls, observability and operations.
