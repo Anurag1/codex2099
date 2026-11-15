@@ -23,7 +23,7 @@ npm run benchmark
 npm run benchmark -- --limit 20
 
 # All 100 cases (live provider calls; review provider costs first)
-npm run benchmark -- --all
+npm run benchmark -- --all --confirm-cost
 
 # Select provider/model
 PROMPT_ARENA_PROVIDER=openai PROMPT_ARENA_MODEL=gpt-4o-mini npm run benchmark -- --limit 5
