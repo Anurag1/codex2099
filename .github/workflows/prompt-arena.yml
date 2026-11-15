@@ -1,0 +1,52 @@
+name: Prompt Arena validation
+
+on:
+  pull_request:
+    paths:
+      - "apps/prompt-arena/**"
+      - ".github/workflows/prompt-arena.yml"
+  push:
+    branches:
+      - main
+      - feature/prompt-arena-live-providers
+    paths:
+      - "apps/prompt-arena/**"
+      - ".github/workflows/prompt-arena.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/prompt-arena
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check module syntax
+        run: |
+          node --check server.mjs
+          node --check lib/prompt-arena-pipeline.mjs
+          node --check scripts/run-benchmark.mjs
+      - name: Run unit and mocked integration tests
+        run: npm test
+      - name: Validate 100-task benchmark structure
+        run: |
+          node --input-type=module -e '
+            import { readFile } from "node:fs/promises";
+            const rows = (await readFile("benchmark/benchmark-100.jsonl", "utf8")).trim().split(/\r?\n/).map(JSON.parse);
+            if (rows.length !== 100) throw new Error("Expected exactly 100 cases");
+            const ids = new Set(rows.map(x => x.id));
+            if (ids.size !== 100) throw new Error("Benchmark IDs must be unique");
+            const counts = Object.groupBy(rows, x => x.category);
+            if (Object.keys(counts).length !== 10 || Object.values(counts).some(x => x.length !== 10)) {
+              throw new Error("Expected 10 balanced categories with 10 cases each");
+            }
+            if (rows.some(x => !x.task || !x.reference_answer || !x.evaluation_notes)) {
+              throw new Error("Every case needs task, reference_answer and evaluation_notes");
+            }
+            console.log("Validated 100 unique cases across 10 balanced categories.");
+          '
