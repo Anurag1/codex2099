@@ -65,7 +65,7 @@ export async function generateCandidates({ task, count, provider, model }) {
     ].join("\n"),
     input: JSON.stringify({ task })
   });
-  return validateCandidateSet(parseJson(response.output), count);
+  return { candidates: validateCandidateSet(parseJson(response.output), count), usage: response.usage, latency_ms: response.latency_ms };
 }
 
 export async function executeCandidate({ candidate, task, provider, model, temperature = 0.2, maxTokens = 1400 }) {
@@ -120,7 +120,7 @@ export async function judgeCandidates({ task, referenceAnswer, trials, provider,
     ].join("\n"),
     input: JSON.stringify({ task, reference_answer: referenceAnswer || null, outputs: blind })
   });
-  return validateJudgments(parseJson(response.output), trials);
+  return { evaluations: validateJudgments(parseJson(response.output), trials), usage: response.usage, latency_ms: response.latency_ms };
 }
 
 export function scoreJudgment(judgment) {
@@ -152,7 +152,8 @@ export async function runPromptArena({
   if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new Error("temperature must be between 0 and 2.");
   if (!Number.isInteger(maxTokens) || maxTokens < 64 || maxTokens > 8192) throw new Error("maxTokens must be between 64 and 8192.");
   const started = Date.now();
-  const generated = await generateCandidates({ task, count: candidateCount, provider, model });
+  const generation = await generateCandidates({ task, count: candidateCount, provider, model });
+  const generated = generation.candidates;
   const candidates = baselinePrompt
     ? [{ id: "ORIGINAL_BASELINE", name: "Original baseline", prompt: baselinePrompt }, ...generated]
     : generated;
@@ -165,8 +166,15 @@ export async function runPromptArena({
   );
   const successful = trials.filter(item => item.status === "succeeded");
   if (!successful.length) throw new Error("All candidate executions failed.");
-  const judgments = await judgeCandidates({ task, referenceAnswer, trials: successful, provider: judgeProvider, model: judgeModel });
+  const judging = await judgeCandidates({ task, referenceAnswer, trials: successful, provider: judgeProvider, model: judgeModel });
+  const judgments = judging.evaluations;
   const leaderboard = rankTrials(successful, judgments);
+  const usageFields = ["input_tokens", "output_tokens"];
+  const usageTotals = Object.fromEntries(usageFields.map(key => [key,
+    [generation.usage, ...successful.map(item => item.usage), judging.usage]
+      .map(item => item?.[key]).filter(Number.isFinite).reduce((sum, value) => sum + value, 0)
+  ]));
+  usageTotals.total_tokens = usageTotals.input_tokens + usageTotals.output_tokens;
   const winner = leaderboard[0];
   return {
     id: randomUUID(), mode: "live_prompt_optimization",
@@ -175,6 +183,11 @@ export async function runPromptArena({
       task, generated_candidates: generated.length, executed_candidates: candidates.length,
       successful: successful.length, failed: trials.length - successful.length,
       duration_ms: Date.now() - started,
+      generation_latency_ms: generation.latency_ms,
+      judge_latency_ms: judging.latency_ms,
+      token_usage: usageTotals,
+      generation_usage: generation.usage,
+      judge_usage: judging.usage,
       score_provenance: "llm_judge_estimate",
       judge_is_independent: judgeProvider !== provider || judgeModel !== model
     },
