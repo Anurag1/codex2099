@@ -9,6 +9,7 @@ const suitePath = path.join(root, "..", "benchmark", "benchmark-100.jsonl");
 const all = (await readFile(suitePath, "utf8")).trim().split(/\r?\n/).map(line => JSON.parse(line));
 const args = process.argv.slice(2);
 const allRequested = args.includes("--all");
+if (allRequested && !args.includes("--confirm-cost")) throw new Error("The full 100-case run makes hundreds of provider calls. Re-run with --all --confirm-cost after reviewing provider costs.");
 const limitIndex = args.indexOf("--limit");
 const limit = allRequested ? 100 : (limitIndex >= 0 ? Number(args[limitIndex + 1]) : 5);
 if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error("--limit must be between 1 and 100.");
