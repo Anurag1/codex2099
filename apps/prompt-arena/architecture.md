@@ -67,3 +67,25 @@ P1 — evaluation validity: labelled benchmark import, exact-match/structured va
 P2 — durable collaboration: PostgreSQL repository layer, authentication, workspace permissions, prompt versioning, audit log and background queue.
 P3 — decision-grade intelligence: calibrated LLM judge, bootstrap confidence intervals, paired statistical tests, cost estimation from versioned price tables and prompt mutation with regression gates.
 P4 — hosted product: managed deployment, quotas/billing, team sharing, privacy controls, observability and operations.
+
+## Component and data flow
+
+~~~mermaid
+flowchart TD
+  UI[Browser UI] --> API[Node.js HTTP API]
+  API --> VALIDATE[Validation and rate limits]
+  VALIDATE --> ORCH[Experiment orchestrator]
+  ORCH --> POOL[Bounded trial worker pool]
+  POOL --> OA[OpenAI adapter]
+  POOL --> AN[Anthropic adapter]
+  POOL --> GE[Gemini adapter]
+  OA --> MODELS[Model provider APIs]
+  AN --> MODELS
+  GE --> MODELS
+  POOL --> EVAL[Heuristic evaluator]
+  EVAL --> AGG[Aggregate and rank]
+  AGG --> UI
+  API --> JSON[(Local JSON run history)]
+  API -. future .-> PG[(PostgreSQL)]
+  API -. future .-> VAULT[Secret manager]
+~~~
