@@ -41,6 +41,7 @@ npm test
 - GET /api/experiments — list recent local experiment snapshots.
 - POST /api/experiments — persist a completed snapshot.
 - GET /api/experiments/:id — retrieve one saved snapshot.
+- PATCH /api/experiments/:id — persist a human-selected winner.
 
 ## Evaluation integrity
 Current scores are heuristic proxies, not factual correctness scores and not an LLM-as-a-judge result. Without a reference, the prototype uses observable output structure. With a reference answer, it measures expected-term overlap only; semantic equivalence and correctness are not established. Validate on a labelled benchmark and use independent human review before selecting a production prompt. The architecture document describes a separately versioned evaluator pipeline for future development.
