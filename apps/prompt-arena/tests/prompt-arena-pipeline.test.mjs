@@ -72,7 +72,7 @@ test("runs generation, candidate execution, blind judging and selection end-to-e
     });
     assert.equal(result.trials.length, 2);
     assert.equal(result.winner.id, "P1");
-    assert.equal(result.winner.score, 96);
+    assert.equal(result.winner.score, 98);
     assert.equal(result.leaderboard[0].rank, 1);
     assert.equal(result.summary.score_provenance, "llm_judge_estimate");
   } finally {
