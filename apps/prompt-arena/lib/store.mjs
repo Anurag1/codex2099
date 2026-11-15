@@ -56,3 +56,21 @@ export async function saveExperiment(input) {
   writeQueue = pending.then(() => undefined, () => undefined);
   return pending;
 }
+
+export async function updateExperimentWinner(id, winner) {
+  const task = async () => {
+    const rows = await readAll();
+    const index = rows.findIndex(item => item.id === id);
+    if (index < 0) return null;
+    rows[index].winner = winner ? String(winner).slice(0, 200) : null;
+    rows[index].updated_at = new Date().toISOString();
+    await mkdir(dataDir, { recursive: true });
+    const temporary = dataFile + ".tmp";
+    await writeFile(temporary, JSON.stringify(rows), { mode: 0o600 });
+    await rename(temporary, dataFile);
+    return rows[index];
+  };
+  const pending = writeQueue.then(task, task);
+  writeQueue = pending.then(() => undefined, () => undefined);
+  return pending;
+}
