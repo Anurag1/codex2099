@@ -107,7 +107,7 @@ const seed=[
 {name:"A · Strict structured extraction",prompt:"You are a precise invoice data extractor. Extract only facts explicitly present. Return JSON with vendor, invoice_number, invoice_date, total, currency, due_date and purchase_order_reference. Use null for absent fields. Never infer missing values."},
 {name:"B · Verify each field",prompt:"Identify each requested field and verify it against the source. Return valid JSON. Mark absent values null and include missing_fields. Do not guess or invent values."}
 ];
-let variants=seed.map((v,i)=>({...v,id:"v"+(i+1)})),lastData=null,selectedWinner=null,healthData=null;
+let variants=seed.map((v,i)=>({...v,id:"v"+(i+1)})),lastData=null,selectedWinner=null,healthData=null,lastSavedId=null;
 function setTab(tab){
  document.querySelectorAll(".section").forEach(el=>el.classList.toggle("active",el.id==="tab-"+tab));
  document.querySelectorAll("[data-tab]").forEach(el=>el.classList.toggle("active",el.dataset.tab===tab));
@@ -138,7 +138,7 @@ async function runLive(){
   const data=await response.json();if(!response.ok)throw new Error(data.error||"Comparison failed.");
   lastData=data;selectedWinner=null;renderResults(data);$("runState").textContent=data.summary.succeeded+" / "+data.summary.total+" SUCCEEDED";$("metricRuns").textContent=data.summary.succeeded;$("metricWinner").textContent="—";
   const record=await fetch("/api/experiments",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:$("experimentName").value,objective:$("objective").value,mode:"live",variants:variants.map(v=>({name:v.name,prompt:v.prompt})),results:data.results,ranking:data.ranking,summary:data.summary})});
-  if(record.ok){const saved=await record.json();$("runState").textContent="SAVED · "+data.summary.succeeded+"/"+data.summary.total;}
+  if(record.ok){const saved=await record.json();lastSavedId=saved.experiment.id;$("runState").textContent="SAVED · "+data.summary.succeeded+"/"+data.summary.total;}
  }catch(error){$("runState").textContent="FAILED";$("results").innerHTML='<div class="empty error">'+esc(error.message)+"</div>";}
  finally{setRunning(false);}
 }
@@ -160,7 +160,8 @@ function renderResults(data){
  $("results").querySelectorAll("[data-winner]").forEach(button=>button.onclick=()=>chooseWinner(button.dataset.winner));
 }
 function chooseWinner(key){
- selectedWinner=key;const bits=key.split("|");$("metricWinner").textContent=bits[0].toUpperCase();
+ selectedWinner=key;const bits=key.split("|");
+ if(lastSavedId)fetch("/api/experiments/"+encodeURIComponent(lastSavedId),{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({winner:key})}).catch(()=>{});$("metricWinner").textContent=bits[0].toUpperCase();
  $("decision").className="";$("decision").innerHTML='<div class="success"><strong>★ Winner recorded</strong></div><p>'+esc(bits[2])+'</p><p class="hint">Provider: '+esc(bits[0])+' · Model: '+esc(bits[1])+'</p><p class="hint">Selection is a human decision, separate from the heuristic score. Re-run on a labelled benchmark before adopting it.</p>';
  if(lastData)renderResults(lastData);
 }
@@ -184,7 +185,7 @@ async function loadHistory(){
 }
 async function openHistory(id){
  const response=await fetch("/api/experiments/"+encodeURIComponent(id));const data=await response.json();if(!response.ok)return alert(data.error||"Could not open experiment.");
- const record=data.experiment;lastData={results:record.results||[],ranking:record.ranking||[],summary:record.summary||{total:0,succeeded:0,failed:0}};
+ const record=data.experiment;lastSavedId=record.id;selectedWinner=record.winner||null;lastData={results:record.results||[],ranking:record.ranking||[],summary:record.summary||{total:0,succeeded:0,failed:0}};
  $("experimentName").value=record.name;$("objective").value=record.objective;variants=(record.variants||[]).map((v,i)=>({...v,id:"h"+i}));drawVariants();setTab("workbench");renderResults(lastData);$("runState").textContent="HISTORY · "+record.mode;
 }
 $("refreshHistory").onclick=loadHistory;
