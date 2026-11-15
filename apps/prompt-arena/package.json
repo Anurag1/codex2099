@@ -1,0 +1,9 @@
+{
+  "name": "prompt-arena",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Controlled prompt comparison across OpenAI, Anthropic and Gemini",
+  "scripts": { "start": "node server.mjs", "test": "node --test" },
+  "engines": { "node": ">=20" }
+}
