@@ -1,3 +1,4 @@
+import "./load-env.mjs";
 const defaults = {
   openai: process.env.OPENAI_DEFAULT_MODEL || "gpt-4o-mini",
   anthropic: process.env.ANTHROPIC_DEFAULT_MODEL || "claude-3-5-haiku-latest",
