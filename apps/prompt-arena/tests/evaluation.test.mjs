@@ -77,3 +77,45 @@ test("OpenAI-compatible adapter sends the candidate prompt and parses usage", as
     if (originalBase === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = originalBase;
   }
 });
+
+test("Anthropic adapter maps system prompt, user input and usage", async () => {
+  const originalKey = process.env.ANTHROPIC_API_KEY, originalFetch = globalThis.fetch;
+  let request = null;
+  process.env.ANTHROPIC_API_KEY = "anthropic-test-key";
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), headers: options.headers, body: JSON.parse(options.body) };
+    return new Response(JSON.stringify({ id: "anthropic-mock", content: [{ type: "text", text: "Anthropic output" }], usage: { input_tokens: 13, output_tokens: 8 } }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const result = await callProvider({ provider: "anthropic", model: "test-model", prompt: "System candidate", input: "Same test input" });
+    assert.equal(result.output, "Anthropic output");
+    assert.equal(result.usage.input_tokens, 13);
+    assert.equal(request.headers["x-api-key"], "anthropic-test-key");
+    assert.equal(request.body.system, "System candidate");
+    assert.equal(request.body.messages[0].content, "Same test input");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY; else process.env.ANTHROPIC_API_KEY = originalKey;
+  }
+});
+
+test("Gemini adapter maps system instruction and parses usage metadata", async () => {
+  const originalKey = process.env.GEMINI_API_KEY, originalFetch = globalThis.fetch;
+  let request = null;
+  process.env.GEMINI_API_KEY = "gemini-test-key";
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), body: JSON.parse(options.body) };
+    return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: "Gemini output" }] } }], usageMetadata: { promptTokenCount: 17, candidatesTokenCount: 9 } }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+  try {
+    const result = await callProvider({ provider: "gemini", model: "test-model", prompt: "System candidate", input: "Same test input" });
+    assert.equal(result.output, "Gemini output");
+    assert.equal(result.usage.input_tokens, 17);
+    assert.match(request.url, /key=gemini-test-key/);
+    assert.equal(request.body.systemInstruction.parts[0].text, "System candidate");
+    assert.equal(request.body.contents[0].parts[0].text, "Same test input");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = originalKey;
+  }
+});
