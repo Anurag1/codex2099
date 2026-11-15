@@ -12,7 +12,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "http://127.0.0.1:" + port;
-const maxBody = 100_000;
+const maxBody = 2_000_000;
 const rateLimit = Number(process.env.RATE_LIMIT_PER_MINUTE || 20);
 const requests = new Map();
 
