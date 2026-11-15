@@ -43,3 +43,37 @@ test("aggregates repeated trials with mean and standard deviation", () => {
   assert.equal(grouped[0].score_stddev, 10);
   assert.equal(grouped[0].mean_latency_ms, 150);
 });
+
+import { createServer } from "node:http";
+import { callProvider } from "../lib/providers.mjs";
+
+test("OpenAI-compatible adapter sends the candidate prompt and parses usage", async () => {
+  const originalKey = process.env.OPENAI_API_KEY;
+  const originalBase = process.env.OPENAI_BASE_URL;
+  let received = null;
+  const mock = createServer(async (req, res) => {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    received = { url: req.url, auth: req.headers.authorization, body: JSON.parse(raw) };
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ id: "mock-request-1", choices: [{ message: { content: "mock model output" } }], usage: { prompt_tokens: 11, completion_tokens: 7 } }));
+  });
+  await new Promise(resolve => mock.listen(0, "127.0.0.1", resolve));
+  const address = mock.address();
+  process.env.OPENAI_API_KEY = "unit-test-secret";
+  process.env.OPENAI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  try {
+    const result = await callProvider({ provider: "openai", model: "test-model", prompt: "Candidate instruction", input: "Shared input" });
+    assert.equal(result.output, "mock model output");
+    assert.equal(result.usage.input_tokens, 11);
+    assert.equal(result.usage.output_tokens, 7);
+    assert.equal(received.url, "/v1/chat/completions");
+    assert.equal(received.auth, "Bearer unit-test-secret");
+    assert.equal(received.body.messages[0].content, "Candidate instruction");
+    assert.equal(received.body.messages[1].content, "Shared input");
+  } finally {
+    await new Promise(resolve => mock.close(resolve));
+    if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
+    if (originalBase === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = originalBase;
+  }
+});
