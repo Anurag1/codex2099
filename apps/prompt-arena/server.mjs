@@ -133,7 +133,8 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ...result, experiment_id: experiment.id });
     }
     if (req.method === "GET" && url.pathname === "/") {
-      const html = await readFile(path.join(root, "index.html"));
+      let html = await readFile(path.join(root, "index.html"), "utf8");
+      html = html.replace('<div class="status">', '<a href="/arena" style="color:#65e0c0;text-decoration:none;margin-right:18px;font-size:12px">AI Prompt Optimizer ↗</a><div class="status">');
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
       return res.end(html);
     }
