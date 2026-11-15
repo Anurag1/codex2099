@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { validateCompareRequest, evaluateOutput, rankOutputs } from "./lib/evaluation.mjs";
+import { validateCompareRequest, evaluateOutput, rankOutputs, aggregateResults } from "./lib/evaluation.mjs";
 import { callProvider, providerStatus } from "./lib/providers.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -64,8 +64,8 @@ const server = http.createServer(async (req, res) => {
         return { provider: task.provider, model: task.model, variant_name: task.variant_name, variant_index: task.variant_index, repetition: task.repetition, status: "succeeded", output: result.output, latency_ms: result.latency_ms, usage: result.usage, provider_request_id: result.provider_request_id, score: evaluation.score, dimensions: evaluation.dimensions, score_provenance: evaluation.provenance, rationale: evaluation.rationale };
       });
       const succeeded = results.filter(x => x.status === "succeeded");
-      const ranked = rankOutputs(succeeded);
-      return send(res, 200, { mode: "live", objective: body.objective, input_sha256: await cryptoHash(body.input), repetitions: body.repetitions, results, ranking: ranked.map((x, i) => ({ rank: i + 1, provider: x.provider, model: x.model, variant_name: x.variant_name, repetition: x.repetition, score: x.score })), summary: { total: results.length, succeeded: succeeded.length, failed: results.length - succeeded.length } });
+      const aggregates = aggregateResults(succeeded);\n      const ranked = rankOutputs(aggregates.map(x => ({ ...x, score: x.mean_score, latency_ms: x.mean_latency_ms })));
+      return send(res, 200, { mode: "live", objective: body.objective, input_sha256: await cryptoHash(body.input), repetitions: body.repetitions, results, ranking: ranked.map((x, i) => ({ rank: i + 1, provider: x.provider, model: x.model, variant_name: x.variant_name, sample_count: x.sample_count, mean_score: x.mean_score, score_stddev: x.score_stddev, mean_latency_ms: x.mean_latency_ms })), summary: { total: results.length, succeeded: succeeded.length, failed: results.length - succeeded.length, groups: aggregates.length } });
     } catch (error) { return send(res, 400, { error: String(error.message || error).slice(0, 500) }); }
   }
   return send(res, 404, { error: "Not found." });
