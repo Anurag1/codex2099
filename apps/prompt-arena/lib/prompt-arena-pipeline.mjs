@@ -1,6 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { callProvider } from "./providers.mjs";
 
+async function mapLimit(items, limit, worker) {
+  const output = new Array(items.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      try { output[index] = await worker(items[index], index); }
+      catch (error) { output[index] = { status: "rejected", reason: error }; }
+    }
+  }));
+  return output;
+}
+
 export const RUBRIC = Object.freeze({
   correctness: 0.35,
   relevance: 0.20,
@@ -128,17 +141,19 @@ export async function runPromptArena({
   if (!["openai", "anthropic", "gemini"].includes(provider)) throw new Error("Unsupported execution provider.");
   if (!["openai", "anthropic", "gemini"].includes(judgeProvider)) throw new Error("Unsupported judge provider.");
   if (!Number.isInteger(candidateCount) || candidateCount < 2 || candidateCount > 8) throw new Error("candidateCount must be between 2 and 8.");
+  if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw new Error("temperature must be between 0 and 2.");
+  if (!Number.isInteger(maxTokens) || maxTokens < 64 || maxTokens > 8192) throw new Error("maxTokens must be between 64 and 8192.");
   const started = Date.now();
   const generated = await generateCandidates({ task, count: candidateCount, provider, model });
   const candidates = baselinePrompt
     ? [{ id: "BASELINE", name: "Original baseline", prompt: baselinePrompt }, ...generated]
     : generated;
-  const settled = await Promise.allSettled(candidates.map(candidate =>
+  const settled = await mapLimit(candidates, Math.max(1, Math.min(8, Number(process.env.MAX_CONCURRENCY || 4))), candidate =>
     executeCandidate({ candidate, task, provider, model, temperature, maxTokens })
-  ));
-  const trials = settled.map((item, index) => item.status === "fulfilled"
-    ? item.value
-    : ({ id: candidates[index].id, name: candidates[index].name, prompt: candidates[index].prompt, status: "failed", error: String(item.reason?.message || item.reason).slice(0, 400) })
+  );
+  const trials = settled.map((item, index) => item?.status === "rejected"
+    ? ({ id: candidates[index].id, name: candidates[index].name, prompt: candidates[index].prompt, status: "failed", error: String(item.reason?.message || item.reason).slice(0, 400) })
+    : item
   );
   const successful = trials.filter(item => item.status === "succeeded");
   if (!successful.length) throw new Error("All candidate executions failed.");
