@@ -6,7 +6,7 @@ Prompt Arena is a controlled prompt-comparison workbench with a static demo mode
 - Edit, add and remove prompt variants.
 - Run all variants against the same user input and objective.
 - Live adapters for OpenAI Chat Completions, Anthropic Messages and Gemini generateContent.
-- Cross-provider comparison and repeated trials (1–5).
+- Cross-provider comparison and repeated trials (1–5), with per-variant mean score, standard deviation, sample count and mean latency.
 - Per-result latency and provider token usage when returned.
 - Transparent heuristic scoring with provenance; optional expected-answer term-overlap proxy.
 - JSON/CSV export in the browser prototype, blind demo review, human preference selection and prompt evolution.
