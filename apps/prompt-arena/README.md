@@ -1,72 +1,59 @@
 # Prompt Arena
 
-Prompt Arena is a controlled prompt-comparison workbench with a static demo mode and a Node.js live-provider backend.
+Prompt Arena is a local-first prompt experimentation application. It compares prompt candidates across OpenAI, Anthropic and Gemini using the same objective and test input, then exposes individual outputs, repeated-trial variability, latency, token usage and explicit human winner selection.
 
-## Features
-- Edit, add and remove prompt variants.
-- Run all variants against the same user input and objective.
+## What works in this prototype
+- Responsive Experiment Studio with editable prompt candidates.
 - Live adapters for OpenAI Chat Completions, Anthropic Messages and Gemini generateContent.
-- Cross-provider comparison and repeated trials (1–5), with per-variant mean score, standard deviation, sample count and mean latency.
-- Per-result latency and provider token usage when returned.
-- Transparent heuristic scoring with provenance; optional expected-answer term-overlap proxy.
-- JSON/CSV export in the browser prototype, blind demo review, human preference selection and prompt evolution.
-- Server-side API keys only; no key entry in browser UI.
+- Cross-provider comparisons with 1–5 repeated trials.
+- Bounded concurrency, request timeouts, input validation and local per-IP rate limiting.
+- Aggregate ranking with mean score, sample count, score standard deviation and mean latency.
+- Per-trial outputs, provider request IDs where available, token usage and errors.
+- Transparent heuristic scoring provenance and optional reference-term overlap proxy.
+- JSON and CSV export.
+- Browser-local Prompt Library.
+- Server-persisted local Run History using an atomic JSON snapshot file.
+- PostgreSQL relational schema for the next persistence layer.
 
-## Run locally
-Requirements: Node.js 20+.
+## Requirements and local setup
+Node.js 20 or newer. No runtime npm dependencies.
 
-```bash
+~~~bash
 cd apps/prompt-arena
 cp .env.example .env
-# Add one or more provider keys to .env
+# Add one or more provider API keys to .env
 npm start
-```
+~~~
 
-Open http://127.0.0.1:4173. The server binds to loopback by default. To use a different host/origin, configure `HOST` and `ALLOWED_ORIGIN` deliberately.
+Open http://127.0.0.1:4173.
 
 ### Provider credentials
-Set one or more of:
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GEMINI_API_KEY`
+Set one or more server-side environment variables: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY. Optional model defaults and the OpenAI-compatible base URL are documented in .env.example. Keys are not entered in the browser and must never be committed to Git.
 
-Optional model defaults and OpenAI-compatible base URL are in `.env.example`. API keys are read only by the server process. Never commit a populated `.env` file or expose provider keys to client-side JavaScript.
-
-## Run tests
-```bash
+## Tests
+~~~bash
 npm test
-```
+~~~
 
 ## API
-- `GET /api/health` — reports which provider credentials are configured (never returns secrets).
-- `POST /api/compare` — executes prompt × provider × repetition tasks in parallel with bounded concurrency.
-
-Example request:
-```json
-{
-  "objective": "Extract invoice fields accurately",
-  "input": "Invoice AR-12 total INR 500",
-  "expected_output": "AR-12 INR 500",
-  "variants": [
-    {"name":"Strict JSON","prompt":"Extract only explicit facts. Return JSON."},
-    {"name":"Verifier","prompt":"Extract fields and verify against source. Use null for missing."}
-  ],
-  "providers": [{"provider":"openai","model":"gpt-4o-mini"}],
-  "repetitions": 2,
-  "temperature": 0.2,
-  "max_tokens": 1200
-}
-```
+- GET /api/health — provider configured flags, model defaults and local storage mode; never returns credentials.
+- POST /api/compare — execute prompt × provider × repetition trials.
+- GET /api/experiments — list recent local experiment snapshots.
+- POST /api/experiments — persist a completed snapshot.
+- GET /api/experiments/:id — retrieve one saved snapshot.
 
 ## Evaluation integrity
-Scores are **heuristic proxies**, not a claim of semantic correctness and not an LLM-as-a-judge result. Without a reference answer, scoring uses observable output features. With a reference answer, the optional metric is expected-term overlap; it is not semantic equivalence. Validate with labelled datasets and human review before relying on rankings. Cost is not estimated because provider price schedules change; token usage is reported when supplied by the provider.
+Current scores are heuristic proxies, not factual correctness scores and not an LLM-as-a-judge result. Without a reference, the prototype uses observable output structure. With a reference answer, it measures expected-term overlap only; semantic equivalence and correctness are not established. Validate on a labelled benchmark and use independent human review before selecting a production prompt. The architecture document describes a separately versioned evaluator pipeline for future development.
 
-## Security and deployment limitations
-- Server defaults to `127.0.0.1`, suitable for local development.
-- This MVP has no user authentication, workspace isolation, persistent run database, or durable job queue. Do not expose it directly to the public internet.
-- For hosted use, add authentication, HTTPS, a secret manager, persistent storage, audit logging, stricter quotas, provider spend caps and an async job queue.
-- In-memory rate limiting is process-local and resets on restart.
-- Avoid submitting credentials, personal data, confidential documents or regulated data.
-- Provider terms, model availability, rate limits and billing are controlled by each provider.
+Provider token usage is reported when the API returns it. Cost is not estimated because model pricing and billing terms change; a future cost feature should use a versioned provider pricing table.
 
-See [architecture.md](architecture.md) and [schema.sql](schema.sql).
+## Data and security boundaries
+- Local run history is stored in apps/prompt-arena/data/experiments.json; the directory is git-ignored.
+- Prompt library entries are stored in browser local storage.
+- API keys remain in the server process environment.
+- The server binds to 127.0.0.1 by default.
+- This prototype has no authentication, workspace isolation, PostgreSQL integration, durable queue or public deployment hardening. Do not expose it directly to the public internet.
+- Avoid sending passwords, personal data, confidential source code or regulated data to model providers.
+- In-memory rate limiting is process-local and resets when the server restarts.
+
+See architecture.md for product architecture, execution invariants, data model, security requirements and roadmap. schema.sql is the PostgreSQL target schema.
