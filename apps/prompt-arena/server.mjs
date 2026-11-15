@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { validateCompareRequest, evaluateOutput, rankOutputs, aggregateResults } from "./lib/evaluation.mjs";
 import { callProvider, providerStatus } from "./lib/providers.mjs";
 import { listExperiments, getExperiment, saveExperiment, updateExperimentWinner } from "./lib/store.mjs";
+import { runPromptArena } from "./lib/prompt-arena-pipeline.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -92,6 +93,44 @@ const server = http.createServer(async (req, res) => {
       if (!body || typeof body !== "object" || !Array.isArray(body.variants) || body.variants.length < 1) return send(res, 400, { error: "An experiment with at least one prompt variant is required." });
       const experiment = await saveExperiment(body);
       return send(res, 201, { experiment });
+    }
+
+    if (req.method === "GET" && url.pathname === "/arena") {
+      const html = await readFile(path.join(root, "arena.html"));
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+      return res.end(html);
+    }
+    if (req.method === "GET" && url.pathname === "/api/benchmark/100") {
+      const raw = await readFile(path.join(root, "benchmark", "benchmark-100.jsonl"), "utf8");
+      const cases = raw.trim().split(/\\r?\\n/).map(line => JSON.parse(line));
+      return send(res, 200, { suite: "Prompt Arena 100-task benchmark", version: "1.0.0", count: cases.length, categories: [...new Set(cases.map(item => item.category))], cases });
+    }
+    if (req.method === "POST" && url.pathname === "/api/arena/run") {
+      if (!limited(req)) return send(res, 429, { error: "Rate limit reached. Wait before retrying." });
+      const body = await readBody(req);
+      if (!body || typeof body.task !== "string" || body.task.trim().length < 3 || body.task.length > 30000) return send(res, 400, { error: "task must contain 3–30,000 characters." });
+      const candidateCount = Number(body.candidateCount ?? 5);
+      if (!Number.isInteger(candidateCount) || candidateCount < 2 || candidateCount > 8) return send(res, 400, { error: "candidateCount must be between 2 and 8." });
+      const provider = String(body.provider || "openai");
+      const model = String(body.model || process.env.OPENAI_DEFAULT_MODEL || "gpt-4o-mini");
+      const judgeProvider = String(body.judgeProvider || provider);
+      const judgeModel = String(body.judgeModel || model);
+      if (!/^[\\w.:-]{1,100}$/.test(model) || !/^[\\w.:-]{1,100}$/.test(judgeModel)) return send(res, 400, { error: "Invalid model identifier." });
+      const result = await runPromptArena({
+        task: body.task, candidateCount, provider, model, judgeProvider, judgeModel,
+        temperature: Number(body.temperature ?? 0.2),
+        maxTokens: Number(body.maxTokens ?? 1400),
+        referenceAnswer: typeof body.referenceAnswer === "string" ? body.referenceAnswer.slice(0, 12000) : null,
+        baselinePrompt: typeof body.baselinePrompt === "string" && body.baselinePrompt.trim() ? body.baselinePrompt.slice(0, 12000) : null
+      });
+      const experiment = await saveExperiment({
+        name: String(body.name || "AI prompt optimization").slice(0, 160),
+        objective: body.task, mode: "live",
+        variants: result.trials.map(({ id, name, prompt }) => ({ id, name, prompt })),
+        results: result.trials, ranking: result.leaderboard,
+        summary: result.summary, winner: result.winner.id
+      });
+      return send(res, 200, { ...result, experiment_id: experiment.id });
     }
     if (req.method === "GET" && url.pathname === "/") {
       const html = await readFile(path.join(root, "index.html"));
