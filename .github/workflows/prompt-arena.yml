@@ -1,0 +1,20 @@
+name: Prompt Arena tests
+on:
+  push:
+    paths:
+      - "apps/prompt-arena/**"
+  pull_request:
+    paths:
+      - "apps/prompt-arena/**"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/prompt-arena
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
