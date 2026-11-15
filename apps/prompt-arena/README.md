@@ -81,7 +81,7 @@ npm run benchmark
 Run a larger sample or all 100 tasks:
 ```bash
 npm run benchmark -- --limit 20
-npm run benchmark -- --all
+npm run benchmark -- --all --confirm-cost
 ```
 
 Set `PROMPT_ARENA_PROVIDER`, `PROMPT_ARENA_MODEL`, and optionally `PROMPT_ARENA_CANDIDATES` to configure the run. The runner includes a fixed baseline prompt in each task's competition and writes a local JSON report under `benchmark/results/`. Live runs require provider credentials and incur provider charges. No live benchmark score is claimed until the runner has actually been executed.
