@@ -102,7 +102,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/benchmark/100") {
       const raw = await readFile(path.join(root, "benchmark", "benchmark-100.jsonl"), "utf8");
-      const cases = raw.trim().split(/\\r?\\n/).map(line => JSON.parse(line));
+      const cases = raw.trim().split(/\r?\n/).map(line => JSON.parse(line));
       return send(res, 200, { suite: "Prompt Arena 100-task benchmark", version: "1.0.0", count: cases.length, categories: [...new Set(cases.map(item => item.category))], cases });
     }
     if (req.method === "POST" && url.pathname === "/api/arena/run") {
@@ -115,7 +115,7 @@ const server = http.createServer(async (req, res) => {
       const model = String(body.model || process.env.OPENAI_DEFAULT_MODEL || "gpt-4o-mini");
       const judgeProvider = String(body.judgeProvider || provider);
       const judgeModel = String(body.judgeModel || model);
-      if (!/^[\\w.:-]{1,100}$/.test(model) || !/^[\\w.:-]{1,100}$/.test(judgeModel)) return send(res, 400, { error: "Invalid model identifier." });
+      if (!/^[\w.:-]{1,100}$/.test(model) || !/^[\w.:-]{1,100}$/.test(judgeModel)) return send(res, 400, { error: "Invalid model identifier." });
       const result = await runPromptArena({
         task: body.task, candidateCount, provider, model, judgeProvider, judgeModel,
         temperature: Number(body.temperature ?? 0.2),
