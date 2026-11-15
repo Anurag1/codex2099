@@ -45,6 +45,7 @@ See schema.sql. Core entities: workspaces and members; experiments and immutable
 - GET /api/experiments — lists recent saved snapshots.
 - POST /api/experiments — persists a completed snapshot in local JSON storage.
 - GET /api/experiments/:id — returns one saved snapshot.
+- PATCH /api/experiments/:id — persists the human-selected winner.
 
 Target production API (not yet implemented): experiment CRUD; prompt variant versioning; asynchronous run creation/status/cancellation; output evaluation and human voting; prompt evolution; JSON/CSV export.
 
