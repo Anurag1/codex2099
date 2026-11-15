@@ -51,3 +51,26 @@ export function evaluateOutput(output, expectedOutput = "") {
 export function rankOutputs(outputs) {
   return [...outputs].sort((a, b) => b.score - a.score || a.latency_ms - b.latency_ms);
 }
+
+export function aggregateResults(outputs) {
+  const groups = new Map();
+  for (const item of outputs) {
+    const key = [item.provider, item.model, item.variant_index].join("::");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.values()].map(items => {
+    const mean = values => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    const scores = items.map(x => x.score).filter(Number.isFinite);
+    const latencies = items.map(x => x.latency_ms).filter(Number.isFinite);
+    const scoreMean = mean(scores);
+    const variance = scores.length ? mean(scores.map(x => (x - scoreMean) ** 2)) : null;
+    return {
+      provider: items[0].provider, model: items[0].model, variant_name: items[0].variant_name,
+      variant_index: items[0].variant_index, sample_count: items.length,
+      mean_score: scoreMean === null ? null : Math.round(scoreMean * 100) / 100,
+      score_stddev: variance === null ? null : Math.round(Math.sqrt(variance) * 100) / 100,
+      mean_latency_ms: latencies.length ? Math.round(mean(latencies) * 100) / 100 : null
+    };
+  });
+}
