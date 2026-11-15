@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { runPromptArena } from "../lib/prompt-arena-pipeline.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const suitePath = path.join(root, "benchmark-100.jsonl");
+const suitePath = path.join(root, "..", "benchmark", "benchmark-100.jsonl");
 const all = (await readFile(suitePath, "utf8")).trim().split(/\r?\n/).map(line => JSON.parse(line));
 const args = process.argv.slice(2);
 const allRequested = args.includes("--all");
@@ -26,7 +26,7 @@ for (const item of selected) {
       candidateCount, provider, model, judgeProvider: provider, judgeModel: model,
       baselinePrompt
     });
-    const baseline = result.leaderboard.find(x => x.id === "BASELINE");
+    const baseline = result.leaderboard.find(x => x.id === "ORIGINAL_BASELINE");
     const bestGenerated = result.leaderboard.find(x => x.id !== "BASELINE");
     results.push({
       id: item.id, category: item.category, status: "succeeded",
@@ -55,7 +55,7 @@ const report = {
   ties: successful.filter(x => x.generated_delta === 0).length,
   results
 };
-const outputDir = path.join(root, "results");
+const outputDir = path.join(root, "..", "benchmark", "results");
 await mkdir(outputDir, { recursive: true });
 const outputPath = path.join(outputDir, `benchmark-${limit}-${Date.now()}.json`);
 await writeFile(outputPath, JSON.stringify(report, null, 2), { mode: 0o600 });
