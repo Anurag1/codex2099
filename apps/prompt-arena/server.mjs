@@ -6,7 +6,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { validateCompareRequest, evaluateOutput, rankOutputs, aggregateResults } from "./lib/evaluation.mjs";
 import { callProvider, providerStatus } from "./lib/providers.mjs";
-import { listExperiments, getExperiment, saveExperiment } from "./lib/store.mjs";
+import { listExperiments, getExperiment, saveExperiment, updateExperimentWinner } from "./lib/store.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -72,6 +72,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/experiments") {
       return send(res, 200, { experiments: await listExperiments(Number(url.searchParams.get("limit") || 50)) });
+    }
+    if (req.method === "PATCH" && url.pathname.startsWith("/api/experiments/")) {
+      if (!limited(req)) return send(res, 429, { error: "Rate limit reached. Wait before retrying." });
+      const id = decodeURIComponent(url.pathname.slice("/api/experiments/".length));
+      const body = await readBody(req);
+      if (body.winner !== null && typeof body.winner !== "string") return send(res, 400, { error: "winner must be a string or null." });
+      const experiment = await updateExperimentWinner(id, body.winner);
+      return experiment ? send(res, 200, { experiment }) : send(res, 404, { error: "Experiment not found." });
     }
     if (req.method === "GET" && url.pathname.startsWith("/api/experiments/")) {
       const id = decodeURIComponent(url.pathname.slice("/api/experiments/".length));
