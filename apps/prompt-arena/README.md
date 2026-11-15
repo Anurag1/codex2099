@@ -58,3 +58,30 @@ Provider token usage is reported when the API returns it. Cost is not estimated 
 - In-memory rate limiting is process-local and resets when the server restarts.
 
 See architecture.md for product architecture, execution invariants, data model, security requirements and roadmap. schema.sql is the PostgreSQL target schema.
+
+
+## AI prompt optimization pipeline
+The live optimization workflow is available from the existing studio via **AI Prompt Optimizer** or directly at `/arena`.
+- `POST /api/arena/run` generates 2–8 diverse prompt candidates, executes each against the same task/provider/model/settings, blindly judges successful outputs, calculates a weighted score and selects a winner.
+- The default rubric is correctness 35%, relevance 20%, completeness 20%, clarity 10%, and constraint adherence 15%. Each dimension is scored 1–5 and normalized to 0–100.
+- Generator, executor and judge provider/model are configurable. For less correlated evaluation, choose a different judge provider/model from the execution model.
+- The winning prompt, output, leaderboard and trial details are persisted to the existing local experiment history.
+- `GET /api/benchmark/100` returns the versioned benchmark suite.
+
+The LLM judge is an estimate, not ground truth. Use reference answers, independent tests and human review for release decisions. The API does not claim a prompt is objectively best.
+
+## 100-task benchmark
+The initial benchmark is `benchmark/benchmark-100.jsonl`: 100 tasks across ten categories, with reference answers and evaluation notes. See `benchmark/README.md` for protocol and caveats.
+
+Run a cost-conscious five-case smoke benchmark:
+```bash
+npm run benchmark
+```
+
+Run a larger sample or all 100 tasks:
+```bash
+npm run benchmark -- --limit 20
+npm run benchmark -- --all
+```
+
+Set `PROMPT_ARENA_PROVIDER`, `PROMPT_ARENA_MODEL`, and optionally `PROMPT_ARENA_CANDIDATES` to configure the run. The runner includes a fixed baseline prompt in each task's competition and writes a local JSON report under `benchmark/results/`. Live runs require provider credentials and incur provider charges. No live benchmark score is claimed until the runner has actually been executed.
